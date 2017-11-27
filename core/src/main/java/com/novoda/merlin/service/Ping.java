@@ -1,30 +1,31 @@
 package com.novoda.merlin.service;
 
-import com.novoda.merlin.MerlinLog;
+import com.novoda.merlin.Endpoint;
 import com.novoda.merlin.service.request.RequestException;
+import com.novoda.merlin.logger.Logger;
 
 class Ping {
 
-    private final String hostAddress;
-    private final HostPinger.ResponseCodeFetcher responseCodeFetcher;
+    private final Endpoint endpoint;
+    private final EndpointPinger.ResponseCodeFetcher responseCodeFetcher;
+    private final ResponseCodeValidator validator;
 
-    Ping(String hostAddress, HostPinger.ResponseCodeFetcher responseCodeFetcher) {
-        this.hostAddress = hostAddress;
+    Ping(Endpoint endpoint, EndpointPinger.ResponseCodeFetcher responseCodeFetcher, ResponseCodeValidator validator) {
+        this.endpoint = endpoint;
         this.responseCodeFetcher = responseCodeFetcher;
+        this.validator = validator;
     }
 
-    public boolean doSynchronousPing() {
-        MerlinLog.d("Pinging : " + hostAddress);
+    boolean doSynchronousPing() {
+        Logger.d("Pinging: " + endpoint);
         try {
-            responseCodeFetcher.from(hostAddress);
+            return validator.isResponseCodeValid(responseCodeFetcher.from(endpoint));
         } catch (RequestException e) {
-            if (e.causedByIO()) {
-                return false;
+            if (!e.causedByIO()) {
+                Logger.e("Ping task failed due to " + e.getMessage());
             }
-
-            throw e;
+            return false;
         }
-        return true;
     }
 
 }

@@ -1,29 +1,24 @@
 package com.novoda.merlin;
 
-import com.novoda.merlin.registerable.Registerer;
+import com.novoda.merlin.registerable.Registrar;
 import com.novoda.merlin.registerable.bind.Bindable;
 import com.novoda.merlin.registerable.connection.Connectable;
 import com.novoda.merlin.registerable.disconnection.Disconnectable;
 import com.novoda.merlin.service.MerlinServiceBinder;
-
-import rx.Observable;
+import com.novoda.merlin.service.ResponseCodeValidator;
 
 public class Merlin {
 
-    public static final String DEFAULT_ENDPOINT = "http://connectivitycheck.android.com/generate_204";
-
     private final MerlinServiceBinder merlinServiceBinder;
-    private final Registerer registerer;
-    private final RxCallbacksManager rxCallbacksManager;
+    private final Registrar registrar;
 
-    Merlin(MerlinServiceBinder merlinServiceBinder, Registerer registerer, RxCallbacksManager rxCallbacksManager) {
+    Merlin(MerlinServiceBinder merlinServiceBinder, Registrar registrar) {
         this.merlinServiceBinder = merlinServiceBinder;
-        this.registerer = registerer;
-        this.rxCallbacksManager = rxCallbacksManager;
+        this.registrar = registrar;
     }
 
-    public void setEndpoint(String endpoint) {
-        merlinServiceBinder.setEndpoint(endpoint);
+    public void setEndpoint(Endpoint endpoint, ResponseCodeValidator validator) {
+        merlinServiceBinder.setEndpoint(endpoint, validator);
     }
 
     public void bind() {
@@ -32,32 +27,19 @@ public class Merlin {
 
     public void unbind() {
         merlinServiceBinder.unbind();
+        registrar.clearRegistrations();
     }
 
     public void registerConnectable(Connectable connectable) {
-        registerer.registerConnectable(connectable);
+        registrar.registerConnectable(connectable);
     }
 
     public void registerDisconnectable(Disconnectable disconnectable) {
-        registerer.registerDisconnectable(disconnectable);
+        registrar.registerDisconnectable(disconnectable);
     }
 
     public void registerBindable(Bindable bindable) {
-        registerer.registerBindable(bindable);
-    }
-
-    public enum ConnectionStatus {
-        CONNECTED, DISCONNECTED
-    }
-
-    public Observable<ConnectionStatus> getConnectionStatusObservable() {
-        if (rxCallbacksManager == null) {
-            throw new MerlinException(
-                    "You must call " + Merlin.Builder.class.getSimpleName() + ".withRxJavaCallbacks()" +
-                            " before asking for a " + Observable.class.getSimpleName()
-            );
-        }
-        return rxCallbacksManager.getRxConnectionStatusObservable();
+        registrar.registerBindable(bindable);
     }
 
     public static class Builder extends MerlinBuilder {

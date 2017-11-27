@@ -1,0 +1,33 @@
+apply plugin: 'com.android.library'
+apply plugin: 'bintray-release'
+
+dependencies {
+    compile project(':core')
+    compile libraries.app.supportAnnotations
+    compile libraries.app.rxJava2
+
+    testCompile libraries.test.jUnit
+    testCompile libraries.test.mockito
+    testCompile libraries.test.fest
+}
+
+android {
+    defaultConfig {
+        minSdkVersion versions.androidSdk.min
+    }
+
+    compileSdkVersion versions.androidSdk.compile
+    buildToolsVersion versions.androidSdk.buildTools
+}
+
+
+publish {
+    userOrg = 'novoda'
+    groupId = 'com.novoda'
+    artifactId = 'merlin-rxjava2'
+    version = project.version
+
+    uploadName = 'merlin-rxjava2'
+    description = 'Observes network connection status & gives callbacks'
+    website = 'https://github.com/novoda/merlin'
+}

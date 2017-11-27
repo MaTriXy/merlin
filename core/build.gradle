@@ -2,27 +2,20 @@ apply plugin: 'com.android.library'
 apply plugin: 'bintray-release'
 
 dependencies {
-    compile 'com.android.support:support-v4:23.2.1'
-    compile 'io.reactivex:rxandroid:1.0.1'
+    compile libraries.app.supportAnnotations
 
-    testCompile 'org.easytesting:fest-assert-core:2.0M8'
-    testCompile 'org.mockito:mockito-core:1.9.5'
-    testCompile 'junit:junit:4.12'
-}
-
-tasks.withType(Test) {
-    scanForTestClasses = false
-    include "**/*Should.class"
+    testCompile libraries.test.jUnit
+    testCompile libraries.test.mockito
+    testCompile libraries.test.fest
 }
 
 android {
     defaultConfig {
-        minSdkVersion 14
-        targetSdkVersion 23
+        minSdkVersion versions.androidSdk.min
     }
 
-    compileSdkVersion 23
-    buildToolsVersion "23.0.3"
+    compileSdkVersion versions.androidSdk.compile
+    buildToolsVersion versions.androidSdk.buildTools
 
     testOptions {
         unitTests.returnDefaultValues = true

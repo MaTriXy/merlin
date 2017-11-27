@@ -1,145 +1,98 @@
 package com.novoda.merlin.service;
 
 import android.app.Service;
-import android.content.ComponentName;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.IBinder;
-import android.support.annotation.VisibleForTesting;
 
-import com.novoda.merlin.MerlinsBeard;
-import com.novoda.merlin.NetworkStatus;
-import com.novoda.merlin.RxCallbacksManager;
 import com.novoda.merlin.receiver.ConnectivityChangeEvent;
-import com.novoda.merlin.receiver.ConnectivityReceiver;
-import com.novoda.merlin.registerable.bind.BindListener;
-import com.novoda.merlin.registerable.connection.ConnectListener;
-import com.novoda.merlin.registerable.disconnection.DisconnectListener;
+import com.novoda.merlin.receiver.ConnectivityChangesRegister;
 
-public class MerlinService extends Service implements HostPinger.PingerCallback {
+public class MerlinService extends Service {
 
-    public static boolean USE_COMPONENT_ENABLED_SETTING = true;
+    private static boolean isBound;
 
-    private final IBinder binder;
-    private CurrentNetworkStatusRetriever currentNetworkStatusRetriever;
-    private HostPinger hostPinger;
+    private IBinder binder = new LocalBinder();
 
-    private ConnectListener connectListener;
-    private DisconnectListener disconnectListener;
+    private ConnectivityChangesRegister connectivityChangesRegister;
+    private ConnectivityChangesForwarder connectivityChangesForwarder;
 
-    private RxCallbacksManager rxCallbacksManager;
-
-    private NetworkStatus networkStatus;
-
-    public MerlinService() {
-        binder = new LocalBinder();
-        hostPinger = HostPinger.newInstance(this);
-    }
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        currentNetworkStatusRetriever = new CurrentNetworkStatusRetriever(MerlinsBeard.from(this.getApplicationContext()), hostPinger);
-    }
-
-    public class LocalBinder extends Binder {
-        public MerlinService getService() {
-            return MerlinService.this;
-        }
+    public static boolean isBound() {
+        return isBound;
     }
 
     @Override
     public IBinder onBind(Intent intent) {
-        enableConnectivityReceiver();
+        isBound = true;
         return binder;
-    }
-
-    private void enableConnectivityReceiver() {
-        setReceiverState(PackageManager.COMPONENT_ENABLED_STATE_ENABLED);
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
-        disableConnectivityReceiver();
+        isBound = false;
+        if (connectivityChangesRegister != null) {
+            connectivityChangesRegister.unregister();
+            connectivityChangesRegister = null;
+
+        }
+
+        if (connectivityChangesForwarder != null) {
+            connectivityChangesForwarder = null;
+        }
+
+        binder = null;
         return super.onUnbind(intent);
     }
 
-    private void disableConnectivityReceiver() {
-        setReceiverState(PackageManager.COMPONENT_ENABLED_STATE_DISABLED);
+    private void start() {
+        assertDependenciesBound();
+        connectivityChangesForwarder.forwardInitialNetworkStatus();
+        connectivityChangesRegister.register(((ConnectivityChangesNotifier) binder));
     }
 
-    private void setReceiverState(int receiverState) {
-        if (USE_COMPONENT_ENABLED_SETTING) {
-            getPackageManager().setComponentEnabledSetting(connectivityReceiverComponent(), receiverState, PackageManager.DONT_KILL_APP);
+    private void assertDependenciesBound() {
+        if (MerlinService.this.connectivityChangesRegister == null) {
+            throw MerlinServiceDependencyMissingException.missing(ConnectivityChangesRegister.class);
+        }
+
+        if (MerlinService.this.connectivityChangesForwarder == null) {
+            throw MerlinServiceDependencyMissingException.missing(ConnectivityChangesForwarder.class);
         }
     }
 
-    @VisibleForTesting
-    protected ComponentName connectivityReceiverComponent() {
-        return new ComponentName(this, ConnectivityReceiver.class);
+    public interface ConnectivityChangesNotifier {
+
+        boolean canNotify();
+
+        void notify(ConnectivityChangeEvent connectivityChangeEvent);
+
     }
 
-    public void setHostname(String hostname) {
-        hostPinger = HostPinger.newInstance(this, hostname);
-    }
+    class LocalBinder extends Binder implements ConnectivityChangesNotifier {
 
-    public void setBindStatusListener(BindListener bindListener) {
-        callbackCurrentStatus(bindListener);
-    }
+        @Override
+        public boolean canNotify() {
+            return MerlinService.isBound();
+        }
 
-    public void setRxCallbacksManager(RxCallbacksManager rxCallbacksManager) {
-        this.rxCallbacksManager = rxCallbacksManager;
-    }
-
-    private void callbackCurrentStatus(BindListener bindListener) {
-        if (bindListener != null) {
-            if (networkStatus == null) {
-                bindListener.onMerlinBind(currentNetworkStatusRetriever.get());
-                return;
+        @Override
+        public void notify(ConnectivityChangeEvent connectivityChangeEvent) {
+            if (!canNotify()) {
+                throw new IllegalStateException("You must call canNotify() before calling notify(ConnectivityChangeEvent)");
             }
-            bindListener.onMerlinBind(networkStatus);
+            MerlinService.this.connectivityChangesForwarder.forward(connectivityChangeEvent);
         }
-    }
 
-    public void setConnectListener(ConnectListener connectListener) {
-        this.connectListener = connectListener;
-    }
-
-    public void setDisconnectListener(DisconnectListener disconnectListener) {
-        this.disconnectListener = disconnectListener;
-    }
-
-    public void onConnectivityChanged(ConnectivityChangeEvent connectivityChangeEvent) {
-        if (!connectivityChangeEvent.asNetworkStatus().equals(networkStatus)) {
-            getCurrentNetworkStatus();
+        void setConnectivityChangesRegister(ConnectivityChangesRegister connectivityChangesRegister) {
+            MerlinService.this.connectivityChangesRegister = connectivityChangesRegister;
         }
-        networkStatus = connectivityChangeEvent.asNetworkStatus();
-    }
 
-    private void getCurrentNetworkStatus() {
-        currentNetworkStatusRetriever.fetchWithPing();
-    }
+        void setConnectivityChangesForwarder(ConnectivityChangesForwarder connectivityChangesForwarder) {
+            MerlinService.this.connectivityChangesForwarder = connectivityChangesForwarder;
+        }
 
-    @Override
-    public void onSuccess() {
-        networkStatus = NetworkStatus.newAvailableInstance();
-        if (connectListener != null) {
-            connectListener.onConnect();
-        }
-        if (rxCallbacksManager != null) {
-            rxCallbacksManager.onConnect();
-        }
-    }
-
-    @Override
-    public void onFailure() {
-        networkStatus = NetworkStatus.newUnavailableInstance();
-        if (disconnectListener != null) {
-            disconnectListener.onDisconnect();
-        }
-        if (rxCallbacksManager != null) {
-            rxCallbacksManager.onDisconnect();
+        void onBindComplete() {
+            MerlinService.this.start();
         }
     }
 
