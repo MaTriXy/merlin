@@ -1,17 +1,18 @@
 package com.novoda.merlin.demo.presentation;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 
+import com.novoda.merlin.Bindable;
+import com.novoda.merlin.Connectable;
+import com.novoda.merlin.Disconnectable;
 import com.novoda.merlin.Merlin;
 import com.novoda.merlin.MerlinsBeard;
 import com.novoda.merlin.NetworkStatus;
 import com.novoda.merlin.demo.R;
 import com.novoda.merlin.demo.connectivity.display.NetworkStatusDisplayer;
 import com.novoda.merlin.demo.presentation.base.MerlinActivity;
-import com.novoda.merlin.registerable.bind.Bindable;
-import com.novoda.merlin.registerable.connection.Connectable;
-import com.novoda.merlin.registerable.disconnection.Disconnectable;
 
 public class DemoActivity extends MerlinActivity implements Connectable, Disconnectable, Bindable {
 
@@ -25,13 +26,16 @@ public class DemoActivity extends MerlinActivity implements Connectable, Disconn
         setContentView(R.layout.main);
 
         viewToAttachDisplayerTo = findViewById(R.id.displayerAttachableView);
-        merlinsBeard = MerlinsBeard.from(this);
+        merlinsBeard = new MerlinsBeard.Builder()
+                .build(this);
         networkStatusDisplayer = new NetworkStatusDisplayer(getResources(), merlinsBeard);
 
         findViewById(R.id.current_status).setOnClickListener(networkStatusOnClick);
+        findViewById(R.id.has_internet_access).setOnClickListener(hasInternetAccessClick);
         findViewById(R.id.wifi_connected).setOnClickListener(wifiConnectedOnClick);
         findViewById(R.id.mobile_connected).setOnClickListener(mobileConnectedOnClick);
         findViewById(R.id.network_subtype).setOnClickListener(networkSubtypeOnClick);
+        findViewById(R.id.next_activity).setOnClickListener(nextActivityOnClick);
     }
 
     private final View.OnClickListener networkStatusOnClick = new View.OnClickListener() {
@@ -42,6 +46,22 @@ public class DemoActivity extends MerlinActivity implements Connectable, Disconn
             } else {
                 networkStatusDisplayer.displayNegativeMessage(R.string.current_status_network_disconnected, viewToAttachDisplayerTo);
             }
+        }
+    };
+
+    private final View.OnClickListener hasInternetAccessClick = new View.OnClickListener() {
+        @Override
+        public void onClick(final View view) {
+            merlinsBeard.hasInternetAccess(new MerlinsBeard.InternetAccessCallback() {
+                @Override
+                public void onResult(boolean hasAccess) {
+                    if (hasAccess) {
+                        networkStatusDisplayer.displayPositiveMessage(R.string.has_internet_access_true, viewToAttachDisplayerTo);
+                    } else {
+                        networkStatusDisplayer.displayNegativeMessage(R.string.has_internet_access_false, viewToAttachDisplayerTo);
+                    }
+                }
+            });
         }
     };
 
@@ -74,6 +94,15 @@ public class DemoActivity extends MerlinActivity implements Connectable, Disconn
         @Override
         public void onClick(View view) {
             networkStatusDisplayer.displayNetworkSubtype(viewToAttachDisplayerTo);
+        }
+    };
+
+    private final View.OnClickListener nextActivityOnClick = new View.OnClickListener() {
+
+        @Override
+        public void onClick(View view) {
+            Intent intent = new Intent(getApplicationContext(), DemoActivity.class);
+            startActivity(intent);
         }
     };
 

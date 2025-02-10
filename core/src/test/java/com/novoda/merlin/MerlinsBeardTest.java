@@ -6,18 +6,14 @@ import android.net.Network;
 import android.net.NetworkInfo;
 import android.os.Build;
 
-import com.novoda.merlin.service.AndroidVersion;
-
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
-import static org.fest.assertions.api.Assertions.assertThat;
-import static org.mockito.BDDMockito.given;
+import static com.google.common.truth.Truth.assertThat;
+import static org.mockito.BDDMockito.*;
+import static org.mockito.Mockito.mock;
 
 public class MerlinsBeardTest {
 
@@ -27,21 +23,18 @@ public class MerlinsBeardTest {
     private static final boolean BELOW_LOLLIPOP = false;
     private static final boolean LOLLIPOP_OR_ABOVE = true;
 
-    @Rule
-    public MockitoRule mockitoRule = MockitoJUnit.rule();
-
-    @Mock
-    private ConnectivityManager connectivityManager;
-    @Mock
-    private NetworkInfo networkInfo;
-    @Mock
-    private AndroidVersion androidVersion;
+    private final ConnectivityManager connectivityManager = mock(ConnectivityManager.class);
+    private final NetworkInfo networkInfo = mock(NetworkInfo.class);
+    private final AndroidVersion androidVersion = mock(AndroidVersion.class);
+    private final EndpointPinger endpointPinger = mock(EndpointPinger.class);
+    private final MerlinsBeard.InternetAccessCallback mockCaptivePortalCallback = mock(MerlinsBeard.InternetAccessCallback.class);
+    private final Ping mockPing = mock(Ping.class);
 
     private MerlinsBeard merlinsBeard;
 
     @Before
     public void setUp() {
-        merlinsBeard = new MerlinsBeard(connectivityManager, androidVersion);
+        merlinsBeard = new MerlinsBeard(connectivityManager, androidVersion, endpointPinger, mockPing);
     }
 
     @Test
@@ -150,6 +143,56 @@ public class MerlinsBeardTest {
         assertThat(connectedToMobileNetwork).isFalse();
     }
 
+    @Test
+    public void givenSuccessfulPing_whenCheckingCaptivePortal_thenCallsOnResultWithTrue() {
+        willAnswer(new Answer<EndpointPinger.PingerCallback>() {
+            @Override
+            public EndpointPinger.PingerCallback answer(InvocationOnMock invocation) {
+                EndpointPinger.PingerCallback cb = invocation.getArgument(0);
+                cb.onSuccess();
+                return cb;
+            }
+        }).given(endpointPinger).ping(any(EndpointPinger.PingerCallback.class));
+
+        merlinsBeard.hasInternetAccess(mockCaptivePortalCallback);
+
+        then(mockCaptivePortalCallback).should().onResult(true);
+    }
+
+    @Test
+    public void givenFailurePing_whenCheckingCaptivePortal_thenCallsOnResultWithFalse() {
+        willAnswer(new Answer<EndpointPinger.PingerCallback>() {
+            @Override
+            public EndpointPinger.PingerCallback answer(InvocationOnMock invocation) {
+                EndpointPinger.PingerCallback cb = invocation.getArgument(0);
+                cb.onFailure();
+                return cb;
+            }
+        }).given(endpointPinger).ping(any(EndpointPinger.PingerCallback.class));
+
+        merlinsBeard.hasInternetAccess(mockCaptivePortalCallback);
+
+        then(mockCaptivePortalCallback).should().onResult(false);
+    }
+
+    @Test
+    public void givenSuccessfulPing_whenCheckingHasInternetAccessSync_thenReturnsTrue() {
+        given(mockPing.doSynchronousPing()).willReturn(true);
+
+        boolean result = merlinsBeard.hasInternetAccess();
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    public void givenFailedPing_whenCheckingHasInternetAccessSync_thenReturnsFalse() {
+        given(mockPing.doSynchronousPing()).willReturn(false);
+
+        boolean result = merlinsBeard.hasInternetAccess();
+
+        assertThat(result).isFalse();
+    }
+
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     @Test
     public void givenNetworkIsConnectedViaMobile_andAndroidVersionIsLollipopOrAbove_whenCheckingIfConnectedToMobile_thenReturnsTrue() {
@@ -203,8 +246,8 @@ public class MerlinsBeardTest {
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private void givenNetworkStateForLollipopOrAbove(boolean isConnected, int networkType) {
-        Network network = Mockito.mock(Network.class);
-        NetworkInfo networkInfo = Mockito.mock(NetworkInfo.class);
+        Network network = mock(Network.class);
+        NetworkInfo networkInfo = mock(NetworkInfo.class);
         given(networkInfo.getType()).willReturn(networkType);
         given(networkInfo.isConnected()).willReturn(isConnected);
         given(connectivityManager.getNetworkInfo(network)).willReturn(networkInfo);
@@ -214,13 +257,13 @@ public class MerlinsBeardTest {
 
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private void givenNetworkStateWithoutNetworkInfoForLollipopOrAbove() {
-        Network network = Mockito.mock(Network.class);
+        Network network = mock(Network.class);
         given(androidVersion.isLollipopOrHigher()).willReturn(LOLLIPOP_OR_ABOVE);
         given(connectivityManager.getAllNetworks()).willReturn(new Network[]{network});
     }
 
     private void givenNetworkStateForBelowLollipop(boolean isConnected, int networkType) {
-        NetworkInfo networkInfo = Mockito.mock(NetworkInfo.class);
+        NetworkInfo networkInfo = mock(NetworkInfo.class);
         given(androidVersion.isLollipopOrHigher()).willReturn(BELOW_LOLLIPOP);
         given(connectivityManager.getNetworkInfo(networkType)).willReturn(networkInfo);
         given(networkInfo.isConnected()).willReturn(isConnected);

@@ -1,12 +1,18 @@
 allprojects {
-    version = '1.1.5'
-    repositories { mavenCentral() }
+    version = '1.2.1'
+    repositories {
+        mavenCentral()
+        google()
+    }
 }
 
 buildscript {
     apply from: 'dependencies.gradle'
 
-    repositories { jcenter() }
+    repositories {
+        google()
+        jcenter()
+    }
     dependencies {
         classpath libraries.build.androidGradle
         classpath libraries.build.bintrayRelease
